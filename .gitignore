@@ -1,0 +1,9 @@
+.env
+credentials/
+__pycache__/
+output/
+logs/
+*.pyc
+*.pyo
+.DS_Store
+식품_v5.2.xlsx
