@@ -26,12 +26,20 @@ from core.excel_handler import load_template, get_sheet_names
 from core.providers import create_provider
 from core.analyzer import run_analysis_sync
 from core.history_logger import log_analysis, is_gsheet_configured
+from core.drive_sync import sync_templates_from_drive
 
 # ── 로깅 설정 ──
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
 )
+
+# ── 앱 시작 시 Google Drive에서 템플릿 동기화 (세션당 1회) ──
+if "drive_synced" not in st.session_state:
+    synced = sync_templates_from_drive()
+    st.session_state.drive_synced = True
+    if synced:
+        logging.info("Drive 템플릿 동기화 완료: %s", synced)
 
 # ── 페이지 설정 ──
 st.set_page_config(
