@@ -57,6 +57,8 @@ def get_template_version(template_path: Path) -> str:
 PLACEHOLDERS = [
     "— AI 분석 대기 —",
     "분석 전",
+    "(응답 누락)",
+    "(API 오류)",
 ]
 
 # ── Row 1 타이틀 치환용 ──
@@ -67,7 +69,7 @@ TITLE_PATTERN_HARDCODED = "CJ제일제당"
 INDUSTRIES = ["식품", "건설", "화학", "제약/바이오", "IT/전자", "금융", "에너지", "기타"]
 
 # ── 병렬 처리 ──
-MAX_CONCURRENT = 3
+MAX_CONCURRENT = 5
 
 # ── LLM 모델 설정 ──
 MODELS = {

@@ -51,25 +51,41 @@ def prepare_for_claude(pdf_bytes: bytes) -> str:
 
 # ── OpenAI용: PDF 페이지를 이미지로 변환 ──
 
-MAX_PAGES_FOR_OPENAI = 80  # GPT 컨텍스트 한계 대비
+MAX_IMAGE_TOTAL_MB = 45  # OpenAI 제한 50MB보다 여유 확보
 
 
-def prepare_for_openai(pdf_bytes: bytes, dpi: int = 150) -> list[str]:
-    """PDF를 페이지별 PNG 이미지 base64 리스트로 변환.
+def prepare_for_openai(pdf_bytes: bytes, dpi: int = 100) -> list[str]:
+    """PDF를 페이지별 JPEG 이미지 base64 리스트로 변환.
 
-    페이지가 MAX_PAGES_FOR_OPENAI를 초과하면 앞쪽 페이지만 사용.
+    총 이미지 크기가 MAX_IMAGE_TOTAL_MB를 초과하지 않도록 자동 조절.
     """
+    from PIL import Image
+
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     images: list[str] = []
+    total_bytes = 0
+    max_bytes = MAX_IMAGE_TOTAL_MB * 1024 * 1024
 
-    page_count = min(len(doc), MAX_PAGES_FOR_OPENAI)
-    for i in range(page_count):
-        page = doc.load_page(i)
-        mat = fitz.Matrix(dpi / 72, dpi / 72)
-        pix = page.get_pixmap(matrix=mat)
-        img_bytes = pix.tobytes("png")
-        b64 = base64.standard_b64encode(img_bytes).decode("utf-8")
-        images.append(b64)
+    for i in range(len(doc)):
+        try:
+            page = doc.load_page(i)
+            mat = fitz.Matrix(dpi / 72, dpi / 72)
+            pix = page.get_pixmap(matrix=mat)
+
+            # PyMuPDF → PIL → JPEG (더 안정적)
+            img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG", quality=75)
+            img_bytes = buf.getvalue()
+
+            total_bytes += len(img_bytes)
+            if total_bytes > max_bytes:
+                break
+
+            b64 = base64.standard_b64encode(img_bytes).decode("utf-8")
+            images.append(b64)
+        except Exception:
+            continue  # 변환 실패한 페이지는 건너뜀
 
     doc.close()
     return images

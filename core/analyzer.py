@@ -62,60 +62,119 @@ class CostTracker:
         }
 
 
-# ── 단일 시트 분석 ──
+# ── 단일 배치 분석 ──
 
 
-async def _analyze_one_sheet(
+@dataclass
+class BatchItem:
+    """배치 내 개별 지표. 원래 소속 시트를 추적한다."""
+    sheet_name: str
+    indicator: dict
+
+
+async def _analyze_batch(
     semaphore: asyncio.Semaphore,
     provider: LLMProvider,
     pdf_bytes: bytes,
-    sheet_name: str,
-    indicators: list[dict],
-) -> tuple[str, list[dict] | str, dict]:
-    """한 시트를 분석하고 (sheet_name, results|error, usage)를 반환한다."""
+    batch_id: int,
+    batch_items: list[BatchItem],
+) -> tuple[int, list[tuple[str, dict]] | str, dict]:
+    """배치를 분석하고 (batch_id, [(sheet_name, result_item)...] | error, usage)를 반환한다."""
     async with semaphore:
-        user_prompt = build_user_prompt(sheet_name, indicators)
+        # 프롬프트용 지표 리스트 구성
+        indicators = [item.indicator for item in batch_items]
+        # 배치에 포함된 시트명 목록
+        sheet_names = list(dict.fromkeys(item.sheet_name for item in batch_items))
+        label = " + ".join(sheet_names)
+
+        user_prompt = build_user_prompt(label, indicators)
+        expected = len(batch_items)
+        MAX_ATTEMPTS = 3
         last_error = ""
+        best_results: list[dict] | None = None
+        best_usage: dict | None = None
         t_start = time.time()
 
-        for attempt in range(2):
+        for attempt in range(MAX_ATTEMPTS):
             try:
                 results, usage = await provider.analyze_sheet(
                     pdf_bytes=pdf_bytes,
                     system_prompt=SYSTEM_PROMPT,
                     user_prompt=user_prompt,
                 )
-                usage["elapsed_sec"] = time.time() - t_start
-                logger.info(
-                    "[%s] %s 분석 완료 — %d개 지표 (%.1f초)",
-                    provider.provider_name,
-                    sheet_name,
-                    len(results),
-                    usage["elapsed_sec"],
-                )
-                return (sheet_name, results, usage)
+
+                # 가장 완성도 높은 응답을 보존 (재시도가 더 적게 반환할 수도 있음)
+                if best_results is None or len(results) > len(best_results):
+                    best_results = results
+                    best_usage = usage
+
+                if len(results) >= expected:
+                    break
+
+                if attempt < MAX_ATTEMPTS - 1:
+                    logger.warning(
+                        "[%s] 배치%d (%s) 부분 응답 %d/%d — 재시도 (%d/%d)",
+                        provider.provider_name, batch_id, label,
+                        len(results), expected, attempt + 1, MAX_ATTEMPTS,
+                    )
+                    await asyncio.sleep(2)
+                    continue
+                break
 
             except json.JSONDecodeError as e:
                 last_error = f"JSON 파싱 실패: {e}"
                 logger.warning(
-                    "[%s] %s JSON 파싱 실패 (시도 %d/2): %s",
-                    provider.provider_name, sheet_name, attempt + 1, e,
+                    "[%s] 배치%d JSON 파싱 실패 (시도 %d/%d): %s",
+                    provider.provider_name, batch_id, attempt + 1, MAX_ATTEMPTS, e,
                 )
-                if attempt == 0:
+                if attempt < MAX_ATTEMPTS - 1:
                     await asyncio.sleep(2)
                     continue
 
             except Exception as e:
                 last_error = f"API 오류: {e}"
                 logger.error(
-                    "[%s] %s API 오류 (시도 %d/2): %s",
-                    provider.provider_name, sheet_name, attempt + 1, e,
+                    "[%s] 배치%d API 오류 (시도 %d/%d): %s",
+                    provider.provider_name, batch_id, attempt + 1, MAX_ATTEMPTS, e,
                 )
-                if attempt == 0:
+                if attempt < MAX_ATTEMPTS - 1:
                     await asyncio.sleep(3)
                     continue
 
-        return (sheet_name, last_error, {"input_tokens": 0, "output_tokens": 0, "elapsed_sec": time.time() - t_start})
+        # 모든 시도가 예외로 끝났고 부분 결과도 없음
+        if best_results is None:
+            return (batch_id, last_error, {"input_tokens": 0, "output_tokens": 0, "elapsed_sec": time.time() - t_start})
+
+        results = best_results
+        usage = best_usage
+        usage["elapsed_sec"] = time.time() - t_start
+
+        if len(results) >= expected:
+            logger.info(
+                "[%s] 배치%d (%s) 분석 완료 — %d개 지표 (%.1f초)",
+                provider.provider_name, batch_id, label,
+                len(results), usage["elapsed_sec"],
+            )
+        else:
+            logger.warning(
+                "[%s] 배치%d (%s) 재시도 후에도 부분 응답 — %d/%d개만 수집 (%.1f초)",
+                provider.provider_name, batch_id, label,
+                len(results), expected, usage["elapsed_sec"],
+            )
+
+        # 결과를 원래 시트에 매핑
+        mapped: list[tuple[str, dict]] = []
+        for i, item in enumerate(batch_items):
+            if i < len(results):
+                mapped.append((item.sheet_name, results[i]))
+            else:
+                mapped.append((item.sheet_name, {
+                    "indicator_number": item.indicator["indicator_number"],
+                    "e_content": "(응답 누락)",
+                    "f_score": 0,
+                    "g_review": "※검토필요 — LLM 응답에서 누락됨",
+                }))
+        return (batch_id, mapped, usage)
 
 
 # ── 전체 분석 실행 ──
@@ -140,47 +199,76 @@ async def run_analysis(
     semaphore = asyncio.Semaphore(MAX_CONCURRENT)
     tracker = CostTracker(model=provider.model)
 
-    # 처리할 시트와 지표 필터링
-    sheet_tasks: list[tuple[str, list[dict]]] = []
+    # 전체 지표를 시트 경계 없이 15개씩 배치로 묶기
+    BATCH_SIZE = 15
+    all_items: list[BatchItem] = []
+
     for sheet_name in selected_sheets:
         if sheet_name not in template_data:
             continue
         indicators = template_data[sheet_name]
-        pending = [i for i in indicators if not i["has_existing_content"]]
-        if pending:
-            sheet_tasks.append((sheet_name, pending))
+        for ind in indicators:
+            if not ind["has_existing_content"]:
+                all_items.append(BatchItem(sheet_name=sheet_name, indicator=ind))
 
-    total = len(sheet_tasks)
-    if total == 0:
+    if not all_items:
         logger.info("분석할 지표가 없습니다.")
         return output_path, tracker.summary()
 
+    # 25개씩 배치 생성
+    batches: list[list[BatchItem]] = []
+    for i in range(0, len(all_items), BATCH_SIZE):
+        batches.append(all_items[i:i + BATCH_SIZE])
+
+    total = len(batches)
+    logger.info("총 %d개 지표 → %d개 배치 (배치당 최대 %d개)", len(all_items), total, BATCH_SIZE)
+
     # 병렬 실행
     tasks = [
-        _analyze_one_sheet(semaphore, provider, pdf_bytes, sname, inds)
-        for sname, inds in sheet_tasks
+        _analyze_batch(semaphore, provider, pdf_bytes, bid, batch)
+        for bid, batch in enumerate(batches, 1)
     ]
 
     completed = 0
     for coro in asyncio.as_completed(tasks):
-        sheet_name, result, usage = await coro
+        batch_id, result, usage = await coro
         completed += 1
         progress = completed / total
 
+        # 배치 라벨
+        batch = batches[batch_id - 1]
+        batch_sheets = list(dict.fromkeys(item.sheet_name for item in batch))
+        label = " + ".join(batch_sheets)
+
         # 비용·시간 누적
-        sheet_cost = tracker.add(sheet_name, usage["input_tokens"], usage["output_tokens"], usage.get("elapsed_sec", 0))
+        batch_cost = tracker.add(f"배치{batch_id}", usage["input_tokens"], usage["output_tokens"], usage.get("elapsed_sec", 0))
 
         if isinstance(result, list):
-            write_sheet_results(output_path, company_name, sheet_name, result)
-            status = f"완료 ({len(result)}개 지표)"
+            # 결과를 시트별로 분류하여 기입
+            by_sheet: dict[str, list[dict]] = {}
+            for sheet_name, item_result in result:
+                by_sheet.setdefault(sheet_name, []).append(item_result)
+            for sheet_name, sheet_results in by_sheet.items():
+                write_sheet_results(output_path, company_name, sheet_name, sheet_results)
+            status = f"배치{batch_id} 완료 ({label}, {len(result)}개)"
             if progress_callback:
-                progress_callback(sheet_name, status, progress, sheet_cost)
+                progress_callback(label, status, progress, batch_cost)
         else:
-            error_results = _make_error_results(template_data[sheet_name], result)
-            write_sheet_results(output_path, company_name, sheet_name, error_results)
-            status = f"오류: {result}"
+            # 오류 시 배치 내 모든 지표에 오류 기입
+            by_sheet: dict[str, list[dict]] = {}
+            for item in batch:
+                err = {
+                    "indicator_number": item.indicator["indicator_number"],
+                    "e_content": f"(API 오류) {result}",
+                    "f_score": 0,
+                    "g_review": f"※검토필요 — {result}",
+                }
+                by_sheet.setdefault(item.sheet_name, []).append(err)
+            for sheet_name, sheet_results in by_sheet.items():
+                write_sheet_results(output_path, company_name, sheet_name, sheet_results)
+            status = f"배치{batch_id} 오류: {result}"
             if progress_callback:
-                progress_callback(sheet_name, status, progress, sheet_cost)
+                progress_callback(label, status, progress, batch_cost)
 
     logger.info("분석 완료: %s → %s (총 비용: $%.4f)", company_name, output_path, tracker.total_cost)
     return output_path, tracker.summary()

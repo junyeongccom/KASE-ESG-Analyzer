@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from openpyxl import load_workbook
+from openpyxl.styles import Alignment
 
 from config import (
     PLACEHOLDERS,
@@ -200,9 +201,9 @@ def _ensure_output_file(
 ) -> Path:
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    today = datetime.now().strftime("%Y%m%d")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M")
     version = get_template_version(Path(template_path))
-    filename = f"{company_name}_{version}_{today}_분석결과.xlsx"
+    filename = f"{company_name}_{version}_{timestamp}_분석결과.xlsx"
     output_path = output_dir / filename
     if not output_path.exists():
         shutil.copy2(str(template_path), str(output_path))
@@ -257,7 +258,11 @@ def write_sheet_results(
         if not _is_placeholder(ws.cell(row=target_row, column=e_col).value):
             continue
 
-        ws.cell(row=target_row, column=e_col).value = item.get("e_content", "")
+        wrap_align = Alignment(wrap_text=True, vertical="top")
+
+        e_cell = ws.cell(row=target_row, column=e_col)
+        e_cell.value = item.get("e_content", "")
+        e_cell.alignment = wrap_align
 
         if f_col:
             try:
@@ -266,7 +271,18 @@ def write_sheet_results(
                 ws.cell(row=target_row, column=f_col).value = 0
 
         if g_col:
-            ws.cell(row=target_row, column=g_col).value = item.get("g_review", "")
+            g_cell = ws.cell(row=target_row, column=g_col)
+            g_cell.value = item.get("g_review", "")
+            g_cell.alignment = wrap_align
+
+        # 행 높이 자동 조정 (E열 내용 기준, 1줄당 약 15pt)
+        content = str(item.get("e_content", ""))
+        col_width = 60  # E열 대략 너비 (문자 수)
+        line_count = content.count("\n") + 1
+        char_lines = max(1, len(content) // col_width)
+        total_lines = max(line_count, char_lines)
+        row_height = max(15, min(total_lines * 15, 300))  # 최소 15, 최대 300
+        ws.row_dimensions[target_row].height = row_height
 
     wb.save(str(output_path))
     wb.close()

@@ -95,12 +95,13 @@ with st.sidebar:
     selected_template_path = industry_templates[selected_template_idx]
     selected_template_version = get_template_version(selected_template_path)
 
-    # 모델 선택
+    # 모델 선택 (GPT 기본값)
     model_names = list(MODELS.keys())
+    default_idx = model_names.index("GPT") if "GPT" in model_names else 0
     selected_model = st.selectbox(
         "LLM 모델 선택",
         model_names,
-        index=0,
+        index=default_idx,
         help="환경변수에 해당 모델의 API 키가 설정되어 있어야 합니다.",
     )
 
@@ -223,10 +224,16 @@ if not selected_sheets:
     st.warning("⚠️ 최소 1개 시트를 선택하세요.")
     st.stop()
 
-# 선택 요약
+# 선택 요약 — 지표 수 + 배치 수 표시
+_template_data = load_template(selected_template_path)
+_total_indicators = sum(
+    len([i for i in _template_data.get(s, []) if not i["has_existing_content"]])
+    for s in selected_sheets
+)
+_total_batches = -(-_total_indicators // 25)  # 25개씩 배치
 st.info(
-    f"📋 **{len(uploaded_files)}개 PDF** × **{len(selected_sheets)}개 시트** "
-    f"= 총 **{len(uploaded_files) * len(selected_sheets)}개** API 호출 예정"
+    f"📋 **{len(uploaded_files)}개 PDF** | **{len(selected_sheets)}개 시트** | "
+    f"**{_total_indicators}개 지표** → **{_total_batches}개 배치** API 호출 예정"
 )
 
 # ── 4. 분석 실행 ──

@@ -7,3 +7,5 @@ templates/*.xlsx
 *.pyc
 *.pyo
 .DS_Store
+session_*.json
+session_*.jsonl
