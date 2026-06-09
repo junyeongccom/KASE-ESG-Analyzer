@@ -1,4 +1,5 @@
 import os
+import unicodedata
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -31,19 +32,22 @@ LOG_DIR.mkdir(exist_ok=True)
 # 파일명 규칙: {산업분류}_{버전}.xlsx  예: 식품_v5.2.xlsx, 건설_v5.3.xlsx
 
 def get_templates_for_industry(industry: str) -> list[Path]:
-    """해당 산업의 템플릿 파일 목록을 반환한다 (최신순 정렬)."""
-    pattern = f"{industry}_*.xlsx"
-    files = sorted(TEMPLATES_DIR.glob(pattern), reverse=True)
-    return files
+    """해당 산업의 템플릿 파일 목록을 반환한다 (최신순 정렬). 한글 정규화(NFC/NFD) 무관."""
+    target = unicodedata.normalize("NFC", industry)
+    files = [
+        f for f in TEMPLATES_DIR.glob("*.xlsx")
+        if unicodedata.normalize("NFC", f.stem).split("_", 1)[0] == target
+    ]
+    return sorted(files, reverse=True)
 
 
 def get_all_industries_with_templates() -> list[str]:
-    """templates/ 폴더에 있는 산업 분류 목록을 반환한다."""
+    """templates/ 폴더에 있는 산업 분류 목록을 반환한다 (NFC 정규화로 중복 제거)."""
     industries = set()
     for f in TEMPLATES_DIR.glob("*.xlsx"):
         parts = f.stem.split("_", 1)
         if parts:
-            industries.add(parts[0])
+            industries.add(unicodedata.normalize("NFC", parts[0]))
     return sorted(industries)
 
 
@@ -67,7 +71,7 @@ TITLE_PATTERN_HARDCODED = "CJ제일제당"
 INDUSTRIES = ["식품", "건설", "화학", "제약/바이오", "IT/전자", "금융", "에너지", "기타"]
 
 # ── 병렬 처리 ──
-MAX_CONCURRENT = 3
+MAX_CONCURRENT = 5
 
 # ── LLM 모델 설정 ──
 MODELS = {

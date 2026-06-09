@@ -79,3 +79,70 @@ def build_user_prompt(sheet_name: str, indicators: list[dict]) -> str:
         lines.append("")
 
     return "\n".join(lines)
+
+
+# ── v4 (YN 트리 + 메타데이터) 프롬프트 ──
+
+SYSTEM_PROMPT_V4 = """당신은 ESG 지속가능경영보고서(SR) 평가 전문가입니다. 첨부된 SR PDF만을 근거로 각 지표를 평가하세요.
+
+## 절대 규칙 (환각 방지)
+- SR에 **그대로(verbatim) 인용 가능한 문장/수치**가 있을 때만 '공시됨'으로 인정한다.
+- ESG 일반지식·업계평균·추측으로 빈칸을 메우지 마라. 근거 없으면 미충족으로 본다.
+- **표 하단 주석과 작은 글씨 각주까지** 반드시 확인하라 (정의·수치가 각주에 있는 경우가 많다).
+- 모든 인정 근거에는 [SR p.XX] 페이지 + 원문 인용을 붙여라. 근거 못 찾으면 "(공시확인불가)".
+
+## 점수 = YN 의사결정 트리 (정확히 이 순서)
+ 1) 필수조건 미충족 → '필수=N 점수'
+ 2) 필수조건 충족, 가산조건1 미충족 → 'Y→N 점수'
+ 3) 필수+가산1 충족, 가산조건2 미충족 → 'Y→Y→N 점수'
+ 4) 필수+가산1+가산2 모두 충족 → '만점'
+- 가산조건 칸이 '(없음)'/'(없음 → 바로 만점)'이면 그 분기는 없으며 직전 단계 충족이 최고점.
+- ⚠️ "데이터를 찾음" ≠ "필수조건 충족". 조건 문구가 요구하는 바를 정확히 충족해야 한다.
+
+## 출력 (JSON만)
+- e_content는 **핵심 근거 원문·수치만 간결히** (최대 3줄). g_review는 1~2문장.
+- indicator_number는 각 지표 머리의 번호를 그대로 기입 (예: "(1)", "(13)").
+{"results":[{"indicator_number":"(1)","e_content":"근거 원문 [SR p.XX]","f_score":<숫자>,"g_review":"어느 분기로 몇 점인지 근거"}]}
+"""
+
+
+def _fmt_indicator_v4(ind: dict) -> str:
+    def _sc(v):
+        return v if (v not in (None, "") and str(v).strip()) else 0
+    L = [f"[지표 {ind['indicator_number']}] {ind['name']}"]
+    L.append(f"  · 필수조건: {ind.get('must')}  (미충족 시 {_sc(ind.get('s_mustN'))}점)")
+    add1 = str(ind.get("add1")).strip() if ind.get("add1") is not None else ""
+    if add1 and "없음" not in add1:
+        L.append(f"  · 가산조건1: {add1}  (필수만 충족 시 {_sc(ind.get('s_YN'))}점)")
+        add2 = str(ind.get("add2")).strip() if ind.get("add2") is not None else ""
+        if add2 and "없음" not in add2:
+            L.append(f"  · 가산조건2: {add2}  (필수+가산1 충족 시 {_sc(ind.get('s_YYN'))}점)")
+        L.append(f"  · 위 조건 모두 충족 → {_sc(ind.get('s_full'))}점 (만점)")
+    else:
+        L.append(f"  · (가산조건 없음) 필수조건 충족 시 바로 만점 {_sc(ind.get('s_full'))}점")
+    if ind.get("formula"):
+        L.append(f"  · 참고산식: {ind['formula']}")
+    if ind.get("guide"):
+        L.append(f"  · 평가지침: {ind['guide']}")
+    m = ind.get("meta") or {}
+    if any(m.values()):
+        L += [
+            "  [메타데이터]",
+            f"   - 지표 의도(Intent): {m.get('intent','')}",
+            f"   - 용어 사전/동의어: {m.get('terms','')}",
+            f"   - 인정 형태(Accept): {m.get('accept','')}",
+            f"   - 불인정 반례(Reject): {m.get('reject','')}",
+            f"   - 검색 키워드: {m.get('keywords','')}",
+            f"   - 출처 요구(Citation): {m.get('citation','')}",
+        ]
+    return "\n".join(L)
+
+
+def build_user_prompt_v4(sheet_name: str, indicators: list[dict]) -> str:
+    """v4 유저 프롬프트(YN 트리 + 메타데이터)를 생성한다."""
+    head = [
+        f'아래는 "{sheet_name}" 영역의 평가지표입니다. 첨부 SR에서 각 지표를 평가하고 id를 그대로 echo 하세요.',
+        f"총 지표 수: {len(indicators)}개",
+        "",
+    ]
+    return "\n".join(head) + "\n" + "\n\n".join(_fmt_indicator_v4(i) for i in indicators)

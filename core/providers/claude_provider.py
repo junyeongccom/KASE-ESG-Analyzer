@@ -29,12 +29,13 @@ class ClaudeProvider(LLMProvider):
         pdf_bytes: bytes,
         system_prompt: str,
         user_prompt: str,
+        max_output_tokens: int = 16000,
     ) -> tuple[list[dict], dict]:
         pdf_b64 = prepare_for_claude(pdf_bytes)
 
         message = self.client.messages.create(
             model=self.model,
-            max_tokens=16000,
+            max_tokens=max_output_tokens,
             system=system_prompt,
             messages=[
                 {

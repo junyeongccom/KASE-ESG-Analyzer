@@ -30,6 +30,7 @@ class OpenAIProvider(LLMProvider):
         pdf_bytes: bytes,
         system_prompt: str,
         user_prompt: str,
+        max_output_tokens: int = 16000,
     ) -> tuple[list[dict], dict]:
         page_count = get_page_count(pdf_bytes)
         logger.info("[GPT] PDF pages: %d (limit: %d)", page_count, MAX_PAGES_VISION)
@@ -44,7 +45,7 @@ class OpenAIProvider(LLMProvider):
                 {
                     "type": "image_url",
                     "image_url": {
-                        "url": f"data:image/png;base64,{b64_img}",
+                        "url": f"data:image/jpeg;base64,{b64_img}",
                         "detail": "low",  # 토큰 절약
                     },
                 }
@@ -52,7 +53,7 @@ class OpenAIProvider(LLMProvider):
 
         response = self.client.chat.completions.create(
             model=self.model,
-            max_completion_tokens=16000,
+            max_completion_tokens=max_output_tokens,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": content},

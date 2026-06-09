@@ -29,6 +29,7 @@ class LLMProvider(ABC):
         pdf_bytes: bytes,
         system_prompt: str,
         user_prompt: str,
+        max_output_tokens: int = 16000,
     ) -> tuple[list[dict], dict]:
         """PDF와 프롬프트를 받아 (분석 결과, 토큰 사용량)을 반환한다."""
         ...

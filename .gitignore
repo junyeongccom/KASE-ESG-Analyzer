@@ -7,3 +7,9 @@ templates/*.xlsx
 *.pyc
 *.pyo
 .DS_Store
+session_*.json
+session_*.jsonl
+venv/
+.claude/
+_compare_result.json
+v4_metadata_result.json

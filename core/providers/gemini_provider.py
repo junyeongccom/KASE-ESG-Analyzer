@@ -29,6 +29,7 @@ class GeminiProvider(LLMProvider):
         pdf_bytes: bytes,
         system_prompt: str,
         user_prompt: str,
+        max_output_tokens: int = 16000,
     ) -> tuple[list[dict], dict]:
         combined_prompt = f"{system_prompt}\n\n---\n\n{user_prompt}"
 
@@ -43,7 +44,7 @@ class GeminiProvider(LLMProvider):
                 )
             ],
             config=types.GenerateContentConfig(
-                max_output_tokens=16000,
+                max_output_tokens=max_output_tokens,
                 temperature=0.1,
                 response_mime_type="application/json",
             ),

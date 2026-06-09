@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any
 
 from openpyxl import load_workbook
+from openpyxl.styles import Alignment, PatternFill, Font
+from openpyxl.utils import get_column_letter
 
 from config import (
     PLACEHOLDERS,
@@ -257,7 +259,11 @@ def write_sheet_results(
         if not _is_placeholder(ws.cell(row=target_row, column=e_col).value):
             continue
 
-        ws.cell(row=target_row, column=e_col).value = item.get("e_content", "")
+        wrap_align = Alignment(wrap_text=True, vertical="top")
+
+        e_cell = ws.cell(row=target_row, column=e_col)
+        e_cell.value = item.get("e_content", "")
+        e_cell.alignment = wrap_align
 
         if f_col:
             try:
@@ -266,7 +272,18 @@ def write_sheet_results(
                 ws.cell(row=target_row, column=f_col).value = 0
 
         if g_col:
-            ws.cell(row=target_row, column=g_col).value = item.get("g_review", "")
+            g_cell = ws.cell(row=target_row, column=g_col)
+            g_cell.value = item.get("g_review", "")
+            g_cell.alignment = wrap_align
+
+        # 행 높이 자동 조정 (E열 내용 기준, 1줄당 약 15pt)
+        content = str(item.get("e_content", ""))
+        col_width = 60  # E열 대략 너비 (문자 수)
+        line_count = content.count("\n") + 1
+        char_lines = max(1, len(content) // col_width)
+        total_lines = max(line_count, char_lines)
+        row_height = max(15, min(total_lines * 15, 300))  # 최소 15, 최대 300
+        ws.row_dimensions[target_row].height = row_height
 
     wb.save(str(output_path))
     wb.close()
@@ -278,3 +295,74 @@ def prepare_output_file(
     company_name: str,
 ) -> Path:
     return _ensure_output_file(template_path, output_dir, company_name)
+
+
+# ── v4 결과 기록 ──
+
+_V4_OUT_HEADERS = ["AI AS-IS 내용", "AI 점수", "검토의견"]
+_V4_OUT_WIDTHS = {"AI AS-IS 내용": 60, "AI 점수": 8, "검토의견": 40}
+
+
+def write_results_v4(
+    output_path: str | Path,
+    company_name: str,
+    sheet_name: str,
+    results: list[dict],
+) -> None:
+    """v4(YN 트리) 결과를 기록한다. 출력열이 없으면 시트 끝에 덧붙여 생성한다."""
+    wb = load_workbook(str(output_path))
+    ws = wb[sheet_name]
+
+    # 기존 출력열 탐색
+    colmap: dict[str, int] = {}
+    for c in range(1, ws.max_column + 1):
+        v = ws.cell(1, c).value
+        if v and str(v).strip() in _V4_OUT_HEADERS:
+            colmap[str(v).strip()] = c
+
+    # 없는 출력열은 끝에 생성 (네이비 헤더)
+    navy = PatternFill("solid", start_color="16235A")
+    white = Font(color="FFFFFF", bold=True)
+    nxt = ws.max_column + 1
+    for h in _V4_OUT_HEADERS:
+        if h not in colmap:
+            cell = ws.cell(1, nxt)
+            cell.value = h
+            cell.fill = navy
+            cell.font = white
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            ws.column_dimensions[get_column_letter(nxt)].width = _V4_OUT_WIDTHS[h]
+            colmap[h] = nxt
+            nxt += 1
+
+    e_col, f_col, g_col = colmap["AI AS-IS 내용"], colmap["AI 점수"], colmap["검토의견"]
+
+    # 지표 번호 → row 매핑 (지표명 C열 기준). 모델이 "(1)"/"1"/"지표 1" 등 어떤 형식으로
+    # echo해도 매칭되도록 숫자만 추출해 비교한다.
+    row_map: dict[str, int] = {}
+    n = 0
+    for r in range(2, ws.max_row + 1):
+        v = ws.cell(r, 3).value
+        if v and str(v).strip():
+            n += 1
+            row_map[str(n)] = r
+
+    wrap = Alignment(wrap_text=True, vertical="top")
+    for item in results:
+        key = re.sub(r"\D", "", str(item.get("indicator_number", "")))
+        target_row = row_map.get(key)
+        if target_row is None:
+            continue
+        ec = ws.cell(target_row, e_col)
+        ec.value = item.get("e_content", "")
+        ec.alignment = wrap
+        try:
+            ws.cell(target_row, f_col).value = float(item.get("f_score", 0))
+        except (ValueError, TypeError):
+            ws.cell(target_row, f_col).value = 0
+        gc = ws.cell(target_row, g_col)
+        gc.value = item.get("g_review", "")
+        gc.alignment = wrap
+
+    wb.save(str(output_path))
+    wb.close()
