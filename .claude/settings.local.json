@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python *)",
+      "Bash(python -c ' *)",
+      "Read(//tmp/**)",
+      "Bash(git check-ignore *)"
+    ]
+  }
+}

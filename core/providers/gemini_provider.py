@@ -47,6 +47,7 @@ class GeminiProvider(LLMProvider):
                 max_output_tokens=max_output_tokens,
                 temperature=0.1,
                 response_mime_type="application/json",
+                thinking_config=types.ThinkingConfig(thinking_budget=0),
             ),
         )
 

@@ -61,6 +61,8 @@ def get_template_version(template_path: Path) -> str:
 PLACEHOLDERS = [
     "— AI 분석 대기 —",
     "분석 전",
+    "(응답 누락)",
+    "(API 오류)",
 ]
 
 # ── Row 1 타이틀 치환용 ──

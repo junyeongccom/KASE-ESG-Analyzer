@@ -202,9 +202,9 @@ def _ensure_output_file(
 ) -> Path:
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    today = datetime.now().strftime("%Y%m%d")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M")
     version = get_template_version(Path(template_path))
-    filename = f"{company_name}_{version}_{today}_분석결과.xlsx"
+    filename = f"{company_name}_{version}_{timestamp}_분석결과.xlsx"
     output_path = output_dir / filename
     if not output_path.exists():
         shutil.copy2(str(template_path), str(output_path))
