@@ -228,15 +228,51 @@ if not selected_sheets:
 # 선택 요약 — 지표 수 + 배치 수 표시
 _schema = detect_schema(selected_template_path)
 _template_data = load_v4(selected_template_path) if _schema == "v4" else load_template(selected_template_path)
-_total_indicators = sum(
-    len([i for i in _template_data.get(s, []) if not i["has_existing_content"]])
-    for s in selected_sheets
-)
-_total_batches = -(-_total_indicators // 25)  # 25개씩 배치
-st.info(
-    f"📋 **{len(uploaded_files)}개 PDF** | **{len(selected_sheets)}개 시트** | "
-    f"**{_total_indicators}개 지표** → **{_total_batches}개 배치** API 호출 예정"
-)
+_BATCH_SIZE = 10  # core/analyzer.py 의 BATCH_SIZE 와 동일하게 유지
+
+# 빠른 QA 지표 옵션을 캡션보다 먼저 구성 (캡션·expander 공용)
+_ind_options: list[str] = []
+_ind_label_to_key: dict[str, str] = {}
+for _s in selected_sheets:
+    for _ind in _template_data.get(_s, []):
+        if _ind["has_existing_content"]:
+            continue
+        _key = f"{_s}|{_ind['indicator_number']}"
+        _name = _ind.get("name") or _ind.get("indicator", "")
+        _label = f"[{_s}] {_ind['indicator_number']} {str(_name)[:50]}"
+        _ind_label_to_key[_label] = _key
+        _ind_options.append(_label)
+
+_total_indicators = len(_ind_options)  # 시트 전체 분석 대상 지표 수
+# 직전 실행에서 빠른 QA로 고른 지표(현재 옵션에 유효한 것만) → 캡션이 실제 실행량을 반영
+_qa_prev = [l for l in st.session_state.get("qa_indicators", []) if l in _ind_label_to_key]
+_effective_indicators = len(_qa_prev) if _qa_prev else _total_indicators
+_total_batches = -(-_effective_indicators // _BATCH_SIZE)  # ceil
+
+if _qa_prev:
+    st.info(
+        f"📋 **{len(uploaded_files)}개 PDF** | **{len(selected_sheets)}개 시트** | "
+        f"🔬 빠른 QA **{_effective_indicators}개 지표** (시트 전체 {_total_indicators}개 중) "
+        f"→ **{_total_batches}개 배치** API 호출 예정"
+    )
+else:
+    st.info(
+        f"📋 **{len(uploaded_files)}개 PDF** | **{len(selected_sheets)}개 시트** | "
+        f"**{_total_indicators}개 지표** → **{_total_batches}개 배치** API 호출 예정"
+    )
+
+# 🔬 빠른 QA — 특정 지표만 골라 실행 (비우면 시트 전체)
+selected_indicators = None
+with st.expander("🔬 빠른 QA — 특정 지표만 골라 실행 (비우면 위 시트 전체 실행)", expanded=bool(_qa_prev)):
+    _picked = st.multiselect(
+        "지표 선택 (검색 가능 — 일부만 골라 빠르게 QA)",
+        _ind_options,
+        key="qa_indicators",
+        help="여기서 지표를 고르면 시트 전체 대신 선택한 지표만 분석합니다.",
+    )
+    if _picked:
+        selected_indicators = [_ind_label_to_key[lbl] for lbl in _picked]
+        st.success(f"⚡ 빠른 QA: 선택한 **{len(selected_indicators)}개 지표**만 실행됩니다.")
 
 # ── 4. 분석 실행 ──
 st.header("4. 분석 실행")
@@ -319,6 +355,7 @@ if start_clicked:
                 provider=provider,
                 template_path=selected_template_path,
                 progress_callback=progress_callback,
+                selected_indicators=selected_indicators,
             )
             result_paths.append(output_path)
             all_cost_summaries.append({"company": company, **cost_summary})

@@ -169,8 +169,11 @@ async def run_analysis(
     provider: LLMProvider,
     template_path: str | Path = None,
     progress_callback: Callable[[str, str, float, dict | None], None] | None = None,
+    selected_indicators: list[str] | None = None,
 ) -> tuple[Path, dict]:
     """한 PDF에 대해 선택된 시트들을 분석하고 결과 엑셀을 저장한다.
+
+    selected_indicators: "{시트명}|{indicator_number}" 리스트. 주면 그 지표만 실행(빠른 QA).
 
     Returns
     -------
@@ -201,13 +204,19 @@ async def run_analysis(
 
     all_items: list[BatchItem] = []
 
+    sel = set(selected_indicators) if selected_indicators else None
     for sheet_name in selected_sheets:
         if sheet_name not in template_data:
             continue
         indicators = template_data[sheet_name]
         for ind in indicators:
-            if not ind["has_existing_content"]:
-                all_items.append(BatchItem(sheet_name=sheet_name, indicator=ind))
+            if ind["has_existing_content"]:
+                continue
+            if sel is not None and f"{sheet_name}|{ind['indicator_number']}" not in sel:
+                continue
+            all_items.append(BatchItem(sheet_name=sheet_name, indicator=ind))
+    if sel is not None:
+        logger.info("│ ①로드 │ 🔬빠른QA — 선택 지표 %d개만 실행", len(sel))
 
     if not all_items:
         logger.info("분석할 지표가 없습니다.")
@@ -298,12 +307,14 @@ def run_analysis_sync(
     provider: LLMProvider,
     template_path: str | Path = None,
     progress_callback: Callable[[str, str, float, dict | None], None] | None = None,
+    selected_indicators: list[str] | None = None,
 ) -> tuple[Path, dict]:
     """asyncio 이벤트 루프를 생성하여 분석을 실행하는 동기 래퍼."""
     loop = asyncio.new_event_loop()
     try:
         return loop.run_until_complete(
-            run_analysis(pdf_bytes, company_name, selected_sheets, provider, template_path, progress_callback)
+            run_analysis(pdf_bytes, company_name, selected_sheets, provider, template_path,
+                         progress_callback, selected_indicators)
         )
     finally:
         loop.close()
