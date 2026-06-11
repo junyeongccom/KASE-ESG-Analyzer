@@ -47,7 +47,11 @@ class GeminiProvider(LLMProvider):
                 max_output_tokens=max_output_tokens,
                 temperature=0.1,
                 response_mime_type="application/json",
-                thinking_config=types.ThinkingConfig(thinking_budget=0),
+                # 평가자 flash는 thinking 끔(빠름/저렴), 상위티어 판정자(pro/3.x)는 thinking 켬
+                # (3.1-pro는 thinking 필수 + 각주·교차언어 미묘 오류 포착력↑). -1=동적
+                thinking_config=types.ThinkingConfig(
+                    thinking_budget=0 if "flash" in self.model else -1
+                ),
             ),
         )
 

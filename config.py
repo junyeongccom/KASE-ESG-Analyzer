@@ -106,6 +106,8 @@ PRICING = {
     "gpt-4.1":  {"input": 2.00, "output": 8.00},
     # Gemini
     "gemini-2.5-flash": {"input": 0.30, "output": 2.50},
+    "gemini-2.5-pro": {"input": 1.25, "output": 10.00},  # 판정 폴백. >200k 입력 시 실제 단가 더 높음
+    "gemini-3.1-pro-preview": {"input": 2.00, "output": 12.00},  # 판정자(thinking). >200k 입력 시 $4/$18
 }
 
 

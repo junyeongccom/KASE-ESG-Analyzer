@@ -5,6 +5,7 @@ import asyncio
 import json
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Callable
@@ -77,6 +78,36 @@ class BatchItem:
     """배치 내 개별 지표. 원래 소속 시트를 추적한다."""
     sheet_name: str
     indicator: dict
+
+
+def _apply_structural_override(mapped, batch_items, pdf_bytes_data, batch_id):
+    """v1.3.0 구조적 채점기 오버라이드 — 결정론 지표(년수/임계/추세/완전성 등)는 LLM '판단' 대신
+    코드가 PDF 교차검증한 점수로 f_score를 대체한다. 라우팅 안 된 지표·실패 시 LLM 점수 유지(무해).
+    """
+    try:
+        from structural_scorer import score_for_app
+    except Exception as e:
+        logger.warning("│ 배치%d 구조적채점 임포트 실패 → 오버라이드 스킵: %s", batch_id, e)
+        return
+
+    def _one(pair):
+        item_result, name = pair
+        try:
+            ov = score_for_app(name, pdf_bytes_data)
+        except Exception as e:
+            logger.warning("│ 배치%d 구조적채점 실패(%s): %s", batch_id, str(name)[:24], e)
+            return
+        if ov is not None:
+            sc, rationale = ov
+            item_result["f_score"] = sc
+            prev = str(item_result.get("g_review", "")).strip()
+            item_result["g_review"] = f"[구조적채점 v1.3.0] {rationale}" + (f"\n{prev}" if prev else "")
+            logger.info("│ 배치%d 구조적 오버라이드 │ %s → %s", batch_id, str(name)[:20], sc)
+
+    pairs = [(item_result, bitem.indicator.get("name") or bitem.indicator.get("indicator", ""))
+             for (_sheet, item_result), bitem in zip(mapped, batch_items)]
+    with ThreadPoolExecutor(max_workers=6) as ex:  # 배치 내 구조적 채점 병렬 (지표별 독립 추출콜)
+        list(ex.map(_one, pairs))
 
 
 async def _analyze_batch(
@@ -156,6 +187,12 @@ async def _analyze_batch(
                     "f_score": 0,
                     "g_review": "※검토필요 — LLM 응답에서 누락됨",
                 }))
+        # v1.3.0: 결정론 지표는 구조적 채점기로 점수 오버라이드 (스레드 실행 → 이벤트 루프 비차단)
+        try:
+            await asyncio.get_running_loop().run_in_executor(
+                None, _apply_structural_override, mapped, batch_items, pdf_bytes, batch_id)
+        except Exception as e:
+            logger.warning("│ 배치%d 구조적 오버라이드 단계 예외: %s", batch_id, e)
         return (batch_id, mapped, best_usage)
 
 
