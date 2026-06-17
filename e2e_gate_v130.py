@@ -18,14 +18,14 @@ from core.providers import GeminiProvider
 from structural_scorer import ROUTED, _norm_name, _ROUTE_NAMES, warm
 
 BASE = Path("/Users/junyeongc/KASE/AI도입/KASE_ESG_Analyzer")
-PDFDIR = Path("/Users/junyeongc/KASE/AI도입/03_원본보고서_PDF")
+PDFDIR = Path("/Users/junyeongc/KASE/AI도입/1_데이터셋/pdfs")
 TEMPLATE = str(BASE / "templates/식품_v4.xlsx")
 ENV = dotenv_values(str(BASE / ".env"))
 COMPANIES = [("CJ제일", "CJ제일제당"), ("풀무원", "풀무원"), ("오뚜기", "오뚜기"),
              ("daesang", "대상"), ("nestle", "네슬레"), ("unilever", "유니레버")]
 RUNS = 10
 WORKERS = 2  # 동시 실행 run 수 (rate limit·파일충돌 회피)
-OUTDIR = Path("/Users/junyeongc/KASE/AI도입/02_분석결과/시스템검증_국내외_0610/_요약")
+OUTDIR = Path("/Users/junyeongc/KASE/AI도입/4_결과/v1.3.0_structural")
 OUT = OUTDIR / "e2e_gate_v130.json"
 
 

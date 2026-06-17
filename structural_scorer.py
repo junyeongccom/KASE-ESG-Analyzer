@@ -11,7 +11,7 @@ from google.genai import types
 import fitz
 
 BASE = Path("/Users/junyeongc/KASE/AI도입/KASE_ESG_Analyzer")
-PDFDIR = Path("/Users/junyeongc/KASE/AI도입/03_원본보고서_PDF")
+PDFDIR = Path("/Users/junyeongc/KASE/AI도입/1_데이터셋/pdfs")
 ENV = dotenv_values(str(BASE / ".env"))
 client = genai.Client(api_key=ENV["GOOGLE_API_KEY"], http_options=types.HttpOptions(timeout=120000))  # 120s 타임아웃 — 네트워크 끊김 시 무한 hang 방지
 

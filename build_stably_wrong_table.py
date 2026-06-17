@@ -5,8 +5,8 @@ import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
-JOB = Path("/Users/junyeongc/KASE/AI도입/02_분석결과/시스템검증_국내외_0610")
-OUT = Path("/Users/junyeongc/KASE/v1.3.0_개선과정.xlsx")  # 버전 개선 기록 (표준 양식)
+JOB = Path("/Users/junyeongc/KASE/AI도입/4_결과/시스템검증_국내외_0610")
+OUT = Path("/Users/junyeongc/KASE/AI도입/4_결과/v1.3.0_structural/v1.3.0_개선과정.xlsx")  # 버전 개선 기록 (표준 양식)
 SHEETS = ["식품_환경", "식품_사회"]
 FONT = "맑은 고딕"
 HEAD = PatternFill("solid", fgColor="305496"); FFILL = PatternFill("solid", fgColor="FCE4D6"); PFILL = PatternFill("solid", fgColor="DDEBF7")
@@ -147,7 +147,7 @@ for c, w in enumerate([4, 30, 7, 7, 18, 38, 36, 10], 1):
 ws2.freeze_panes = "C4"; ws2.sheet_view.topLeftCell = "A1"
 
 # ── 검증결과 탭 (전 식품 6사 × 10회, 재현성 셀 양식, flash 원본 → 구조적 after) ──
-AC = json.loads(Path("/Users/junyeongc/KASE/AI도입/02_분석결과/시스템검증_국내외_0610/_요약/structural_repro_allco.json").read_text())["summary"]
+AC = json.loads(Path("/Users/junyeongc/KASE/AI도입/4_결과/v1.3.0_structural/structural_repro_allco.json").read_text())["summary"]
 COMPCOL = ["CJ제일제당", "풀무원", "오뚜기", "대상", "네슬레", "유니레버"]
 VMAP = [
     ("#1 먼지개선", "(먼지) 최근 3개년 대기오염물질 배출 실적이 개선되었다."),

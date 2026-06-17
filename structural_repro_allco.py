@@ -8,7 +8,7 @@ from structural_scorer import INDS, score, pdf_text, pdf_bytes
 COMPANIES = [("CJ제일", "CJ제일제당"), ("풀무원", "풀무원"), ("오뚜기", "오뚜기"),
              ("daesang", "대상"), ("nestle", "네슬레"), ("unilever", "유니레버")]
 RUNS = 10
-DIR = "/Users/junyeongc/KASE/AI도입/02_분석결과/시스템검증_국내외_0610/_요약"
+DIR = "/Users/junyeongc/KASE/AI도입/4_결과/v1.3.0_structural"
 PARTIAL = f"{DIR}/structural_repro_allco_partial.json"
 OUT = f"{DIR}/structural_repro_allco.json"
 

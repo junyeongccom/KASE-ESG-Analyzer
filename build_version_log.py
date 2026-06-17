@@ -4,7 +4,7 @@ import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
-OUT = Path("/Users/junyeongc/KASE/SYSTEM_VERSION_LOG.xlsx")  # KASE 최상위(접근 쉬움, 코드 repo 밖)
+OUT = Path("/Users/junyeongc/KASE/AI도입/SYSTEM_VERSION_LOG.xlsx")  # KASE 최상위(접근 쉬움, 코드 repo 밖)
 OUT.parent.mkdir(exist_ok=True)
 FONT = "맑은 고딕"
 HEAD = PatternFill("solid", fgColor="305496")
@@ -121,7 +121,7 @@ KPI = [
 body(ws4, KPI, 4, wrapcols=(3,))
 ws4.cell(5, 1).font = Font(FONT, size=10, bold=True); ws4.cell(5, 1).fill = GREEN
 ws4.cell(7, 1).font = Font(FONT, size=10, bold=True); ws4.cell(7, 1).fill = GREEN
-ws4.cell(11, 1, "산출물: 02_분석결과/시스템검증_국내외_0610/_요약/ (KASE_v4_검증종합_0610.xlsx · structural_repro_allco.json · e2e_gate_v130.json) / v1.3.0_개선과정.xlsx").font = Font(FONT, size=9, italic=True, color="808080")
+ws4.cell(11, 1, "산출물: 4_결과/v1.3.0_structural/ (structural_repro_allco.json · e2e_gate_v130.json · v1.3.0_개선과정.xlsx) · 4_결과/시스템검증_국내외_0610/_요약/KASE_v4_검증종합_0610.xlsx").font = Font(FONT, size=9, italic=True, color="808080")
 
 # 모든 시트 맨 위에서 열리게
 for s in wb.worksheets:

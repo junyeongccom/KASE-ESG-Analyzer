@@ -14,7 +14,7 @@ _RID2TYPE = {i["id"]: i["type"] for i in INDS}
 SCORED = {_norm_name(nm): f"구조적채점·{_RID2TYPE[rid]}" for rid, nm in _ROUTE_NAMES.items()}  # 정규화 지표명 → 채점방식
 
 TPL = str(BASE / "templates/식품_v4.xlsx")
-OUT = Path("/Users/junyeongc/KASE/평가지표_메타데이터_인벤토리.xlsx")
+OUT = Path("/Users/junyeongc/KASE/AI도입/2_평가지표/평가지표_메타데이터_인벤토리.xlsx")
 FONT = "맑은 고딕"
 HEAD = PatternFill("solid", fgColor="305496")
 HL = PatternFill("solid", fgColor="FFF2CC")        # Reject 셀 강조
