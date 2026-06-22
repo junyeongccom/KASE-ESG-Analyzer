@@ -10,6 +10,7 @@ import gspread
 from config import (
     GSHEET_CREDENTIALS_FILE,
     GSHEET_SPREADSHEET_NAME,
+    GSHEET_SPREADSHEET_ID,
 )
 
 logger = logging.getLogger(__name__)
@@ -61,14 +62,24 @@ def _get_client() -> gspread.Client | None:
         return None
 
 
+def _open_spreadsheet(client: gspread.Client) -> gspread.Spreadsheet:
+    """이력 스프레드시트를 연다.
+    - GSHEET_SPREADSHEET_ID가 있으면 그 시트를 직접 연다(권장, KASE 공용 시트).
+    - 없으면 이름으로 열고, 없으면 새로 생성(구 동작 — 서비스계정 소유).
+    """
+    if GSHEET_SPREADSHEET_ID:
+        return client.open_by_key(GSHEET_SPREADSHEET_ID)
+    try:
+        return client.open(GSHEET_SPREADSHEET_NAME)
+    except gspread.SpreadsheetNotFound:
+        ss = client.create(GSHEET_SPREADSHEET_NAME)
+        logger.info("새 스프레드시트 생성: %s", GSHEET_SPREADSHEET_NAME)
+        return ss
+
+
 def _get_or_create_sheet(client: gspread.Client) -> gspread.Worksheet:
     """스프레드시트를 열거나, 없으면 헤더를 포함해 첫 시트를 초기화한다."""
-    try:
-        spreadsheet = client.open(GSHEET_SPREADSHEET_NAME)
-    except gspread.SpreadsheetNotFound:
-        spreadsheet = client.create(GSHEET_SPREADSHEET_NAME)
-        logger.info("새 스프레드시트 생성: %s", GSHEET_SPREADSHEET_NAME)
-
+    spreadsheet = _open_spreadsheet(client)
     worksheet = spreadsheet.sheet1
 
     # 헤더가 없으면 추가

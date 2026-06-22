@@ -130,6 +130,15 @@ GSHEET_CREDENTIALS_FILE = _get_secret("GSHEET_CREDENTIALS_FILE") or str(
     BASE_DIR / "credentials" / "gsheet_service_account.json"
 )
 GSHEET_SPREADSHEET_NAME = _get_secret("GSHEET_SPREADSHEET_NAME") or "KASE ESG 분석 이력"
+# 이력을 쌓을 스프레드시트 ID(권장). 설정 시 이름 대신 이 시트를 직접 연다.
+# 시트 URL `.../spreadsheets/d/<여기>/edit` 부분. 서비스계정 이메일에 '편집자'로 공유 필요.
+GSHEET_SPREADSHEET_ID = _get_secret("GSHEET_SPREADSHEET_ID") or "1TDL5f0W6lkOKtE9Mjmf6al_m9w9GziNpkwYiLy-bHP4"
+
+# ── Google Drive 평가지표 동기화 ──
+# 산업별 하위폴더(식품/, 건설/ …)를 담은 "평가지표" 폴더의 ID.
+# Drive에서 그 폴더를 열었을 때 URL `.../folders/<여기>` 부분. 비우면 동기화를 건너뛴다.
+# 이 폴더(또는 상위 폴더)를 서비스계정 이메일에 공유해야 앱이 읽을 수 있다.
+DRIVE_INDICATORS_FOLDER_ID = _get_secret("DRIVE_INDICATORS_FOLDER_ID") or "1-pErqxOsqGcY5D9S_IHq3f_WXMgywTLo"
 
 
 def get_api_key(model_name: str) -> str | None:
