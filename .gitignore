@@ -1,5 +1,6 @@
 .env
 credentials/
+.streamlit/secrets.toml
 __pycache__/
 output/
 logs/

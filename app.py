@@ -65,6 +65,32 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# ── 접근 게이트 (선택) ──
+# secrets에 app_password가 설정돼 있으면 비번을 요구하고, 없으면 누구나 접근(게이트 비활성).
+# 공개 URL + 공용 LLM 키 사용 시 secrets에 app_password를 넣어 학회원만 쓰게 한다.
+def _check_access() -> bool:
+    try:
+        pw = st.secrets.get("app_password")
+    except Exception:
+        pw = None
+    if not pw:
+        return True
+    if st.session_state.get("_authed"):
+        return True
+    st.title("🔒 KASE ESG 분석")
+    entered = st.text_input("접근 비밀번호를 입력하세요", type="password")
+    if entered:
+        if entered == str(pw):
+            st.session_state["_authed"] = True
+            st.rerun()
+        else:
+            st.error("비밀번호가 올바르지 않습니다.")
+    return False
+
+
+if not _check_access():
+    st.stop()
+
 # ══════════════════════════════════════════════
 #  사이드바: 모델 선택 + API 상태
 # ══════════════════════════════════════════════
