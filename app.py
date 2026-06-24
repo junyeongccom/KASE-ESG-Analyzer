@@ -18,6 +18,7 @@ from config import (
     get_all_industries_with_templates,
     get_templates_for_industry,
     get_template_version,
+    get_template_display_name,
     get_api_key,
     get_available_models,
 )
@@ -111,7 +112,7 @@ with st.sidebar:
     )
 
     industry_templates = get_templates_for_industry(selected_industry)
-    template_labels = [f"{t.stem} ({get_template_version(t)})" for t in industry_templates]
+    template_labels = [get_template_display_name(t) for t in industry_templates]
     selected_template_idx = st.selectbox(
         "평가지표 템플릿",
         range(len(industry_templates)),

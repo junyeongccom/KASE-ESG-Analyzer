@@ -14,6 +14,7 @@ Drive 구조:
 """
 from __future__ import annotations
 
+import json
 import logging
 import re
 import unicodedata
@@ -125,6 +126,7 @@ def sync_templates_from_drive() -> list[str]:
 
         TEMPLATES_DIR.mkdir(exist_ok=True)
         synced: list[str] = []
+        origin_map: dict[str, str] = {}  # 로컬 파일명 → Drive 원본 파일명(표시용)
 
         for child in children:
             # 산업 = 하위폴더. 루트의 파일(인벤토리 등)은 동기화 대상이 아니다.
@@ -146,9 +148,18 @@ def sync_templates_from_drive() -> list[str]:
                 try:
                     local_path.write_bytes(_download(client, f["id"]))
                     synced.append(local_name)
+                    origin_map[local_name] = name  # Drive 원본 파일명 보존(표시용)
                     logger.info("동기화: %s/%s → %s", industry, name, local_name)
                 except Exception as e:
                     logger.error("다운로드 실패 %s: %s", name, e)
+
+        # 원본 파일명 매핑 저장 (드롭다운에 원본 이름을 보여주기 위함)
+        try:
+            (TEMPLATES_DIR / "_origin_map.json").write_text(
+                json.dumps(origin_map, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+        except Exception as e:
+            logger.warning("원본명 매핑 저장 실패: %s", e)
 
         return synced
 

@@ -1,4 +1,5 @@
 import os
+import json
 import unicodedata
 from pathlib import Path
 from dotenv import load_dotenv
@@ -56,6 +57,27 @@ def get_template_version(template_path: Path) -> str:
     stem = template_path.stem
     parts = stem.split("_", 1)
     return parts[1] if len(parts) > 1 else stem
+
+
+def get_origin_name_map() -> dict:
+    """로컬 템플릿 파일명 → Drive 원본 파일명 매핑(드롭다운 표시용). 없으면 빈 dict."""
+    p = TEMPLATES_DIR / "_origin_map.json"
+    if p.exists():
+        try:
+            return json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+    return {}
+
+
+def get_template_display_name(template_path: Path) -> str:
+    """드롭다운 표시용 이름 = Drive 원본 파일명(있으면) 아니면 로컬 파일명.
+    맥 파일명의 NFC/NFD 차이를 흡수해 매칭한다."""
+    key = unicodedata.normalize("NFC", template_path.name)
+    for k, v in get_origin_name_map().items():
+        if unicodedata.normalize("NFC", k) == key:
+            return v
+    return template_path.name
 
 # ── 플레이스홀더 (덮어쓰기 대상) ──
 PLACEHOLDERS = [
