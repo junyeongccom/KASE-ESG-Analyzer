@@ -35,9 +35,17 @@ def _get_drive_client():
     try:
         import streamlit as st
         if "gsheet" in st.secrets:
-            return gspread.service_account_from_dict(dict(st.secrets["gsheet"]))
-    except Exception:
-        pass
+            info = dict(st.secrets["gsheet"])
+            # Streamlit secrets에 붙여넣을 때 private_key의 줄바꿈이 literal "\n"으로
+            # 들어오는 경우가 흔하다 → 실제 개행으로 정규화해야 인증이 된다.
+            pk = info.get("private_key")
+            if isinstance(pk, str) and "\\n" in pk:
+                info["private_key"] = pk.replace("\\n", "\n")
+            return gspread.service_account_from_dict(info)
+        else:
+            logger.warning("st.secrets에 [gsheet] 테이블이 없습니다 — Secrets 붙여넣기 확인.")
+    except Exception as e:
+        logger.error("st.secrets[gsheet]로 Drive 인증 실패(키 형식 확인): %s", e)
 
     # 2차: 로컬 서비스계정 파일
     cred_path = Path(GSHEET_CREDENTIALS_FILE)
@@ -45,7 +53,9 @@ def _get_drive_client():
         try:
             return gspread.service_account(filename=str(cred_path))
         except Exception as e:
-            logger.error("Drive 인증 실패: %s", e)
+            logger.error("로컬 파일 Drive 인증 실패: %s", e)
+    else:
+        logger.info("로컬 서비스계정 파일 없음: %s", cred_path)
     return None
 
 
